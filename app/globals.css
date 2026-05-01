@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { background: #0b0d10; color: #e6e8eb; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  /* iOS Safari respects this for the bottom safe-area; keeps sticky CTAs above the home bar */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Form controls — touch-friendly minimum heights (44px iOS HIG / Material 48dp).
+ * 16px font-size on inputs prevents Mobile Safari from auto-zooming on focus. */
+input[type="text"], textarea, select {
+  background: #1c2026;
+  border: 1px solid #262b33;
+  color: #e6e8eb;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 16px;
+  min-height: 44px;
+}
+textarea { min-height: 60px; }
+input[type="text"]:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #5eead4;
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.4);
+}
+
+button {
+  cursor: pointer;
+  /* Touch targets — buttons that don't override min-height get a sane floor */
+  min-height: 36px;
+}
+@media (max-width: 640px) {
+  button { min-height: 44px; }
+}
+
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #262b33; border-radius: 4px; }
