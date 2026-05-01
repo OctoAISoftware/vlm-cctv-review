@@ -13,6 +13,7 @@ import {
 } from "@/lib/types";
 import { StatusDots } from "@/components/StatusDot";
 import { ModeToggle } from "@/components/ModeToggle";
+import { ModelFilter } from "@/components/ModelFilter";
 
 type Filter = "all" | "todo" | "done" | "disagreed";
 
@@ -36,6 +37,10 @@ function Dashboard() {
     "all";
   // Active dataset filter — empty = all datasets shown.
   const datasetFilter = sp.get("dataset") ?? "";
+  // Active model filter — empty = all models shown. Affects which model's
+  // status dot drives the "todo / done / disagreed" filter, and propagates
+  // to the per-frame and random pages via the same URL param.
+  const modelFilter = sp.get("model") ?? "";
 
   const [data, setData] = useState<ApiData | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -147,17 +152,20 @@ function Dashboard() {
   const visibleFrames = useMemo(() => {
     if (!data) return [];
     const map = annotationsByCell[mode];
+    // If a model is pinned, the todo/done/disagreed filter applies only
+    // to THAT model's status. Otherwise it spans all models per cell.
+    const scopedModels = modelFilter ? [modelFilter as ModelName] : data.models;
     return framesInDataset.filter((f) => {
-      const cells = data.models.map((m) => map.get(`${f}|${m}`));
+      const cells = scopedModels.map((m) => map.get(`${f}|${m}`));
       const reviewed = cells.filter((a) => a && isAnnotated(a)).length;
-      const allReviewed = reviewed === data.models.length;
+      const allReviewed = reviewed === scopedModels.length;
       const anyDisagreed = cells.some((a) => deriveVerdict(a) === "mismatch");
       if (filter === "todo") return !allReviewed;
       if (filter === "done") return allReviewed;
       if (filter === "disagreed") return anyDisagreed;
       return true;
     });
-  }, [data, filter, mode, annotationsByCell, framesInDataset]);
+  }, [data, filter, mode, annotationsByCell, framesInDataset, modelFilter]);
 
   const setMode = (m: AnnotationMode) => {
     const params = new URLSearchParams(sp.toString());
@@ -175,6 +183,12 @@ function Dashboard() {
     const params = new URLSearchParams(sp.toString());
     if (!d) params.delete("dataset");
     else params.set("dataset", d);
+    router.push(`/?${params.toString()}`);
+  };
+  const setModel = (m: string) => {
+    const params = new URLSearchParams(sp.toString());
+    if (!m) params.delete("model");
+    else params.set("model", m);
     router.push(`/?${params.toString()}`);
   };
 
@@ -206,32 +220,37 @@ function Dashboard() {
         <MetricsCard mode="blind" m={metrics.blind} models={data.models} active={mode === "blind"} />
       </section>
 
-      <section className="flex flex-wrap gap-2 items-center">
-        <span className="text-muted text-sm">Dataset:</span>
-        <button
-          onClick={() => setDataset("")}
-          className={`px-3 py-1 rounded text-sm border ${
-            datasetFilter === ""
-              ? "bg-accent text-bg border-accent"
-              : "bg-surface text-text border-border hover:border-accent"
-          }`}
-        >
-          all ({data.frames.length})
-        </button>
-        {data.datasets.map((d) => (
+      <section className="flex flex-wrap gap-3 items-center">
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-muted text-sm">Dataset:</span>
           <button
-            key={d.id}
-            onClick={() => setDataset(d.id)}
-            title={d.label}
+            onClick={() => setDataset("")}
             className={`px-3 py-1 rounded text-sm border ${
-              datasetFilter === d.id
+              datasetFilter === ""
                 ? "bg-accent text-bg border-accent"
                 : "bg-surface text-text border-border hover:border-accent"
             }`}
           >
-            {d.id} ({d.n_frames})
+            all ({data.frames.length})
           </button>
-        ))}
+          {data.datasets.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => setDataset(d.id)}
+              title={d.label}
+              className={`px-3 py-1 rounded text-sm border ${
+                datasetFilter === d.id
+                  ? "bg-accent text-bg border-accent"
+                  : "bg-surface text-text border-border hover:border-accent"
+              }`}
+            >
+              {d.id} ({d.n_frames})
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto">
+          <ModelFilter models={data.models} active={modelFilter} onChange={setModel} />
+        </div>
       </section>
 
       <section className="flex flex-wrap gap-2 items-center">
@@ -254,10 +273,18 @@ function Dashboard() {
       </section>
 
       <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3">
-        {visibleFrames.map((f) => (
+        {visibleFrames.map((f) => {
+          // Forward the active mode + model filter to the detail page so
+          // the reviewer's context (e.g., "I'm looking only at Cosmos-2B
+          // in blind mode") survives navigation.
+          const qs = new URLSearchParams();
+          if (mode === "blind") qs.set("mode", "blind");
+          if (modelFilter) qs.set("model", modelFilter);
+          const href = `/frame/${encodeURIComponent(f)}${qs.toString() ? `?${qs.toString()}` : ""}`;
+          return (
           <Link
             key={f}
-            href={`/frame/${encodeURIComponent(f)}${mode === "blind" ? "?mode=blind" : ""}`}
+            href={href}
             className="block bg-surface border border-border rounded overflow-hidden hover:border-accent transition"
           >
             <img
@@ -271,7 +298,8 @@ function Dashboard() {
               <StatusDots frame={f} models={data.models} annotationsByCell={annotationsByCell} />
             </div>
           </Link>
-        ))}
+          );
+        })}
       </section>
     </div>
   );

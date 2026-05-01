@@ -12,6 +12,7 @@ import {
   TopMatch,
 } from "@/lib/types";
 import { TranslateButton } from "./TranslateButton";
+import { EventClassPicker } from "./EventClassPicker";
 
 interface Props {
   mode: AnnotationMode;
@@ -27,11 +28,6 @@ interface Props {
   onSaved: (a: Annotation) => void;
   onCleared: () => void;
 }
-
-const PICK_SENTINEL = {
-  NONE: "",
-  PROPOSE_NEW: "__new__",
-} as const;
 
 function emptyPick(): PickSlot {
   return { class_id: null, proposed_label: null, proposed_description: null };
@@ -186,9 +182,9 @@ export function AnnotationForm({
           <span>Your top-3 (most adequate first)</span>
           <span className="text-muted normal-case">#1 required, #2 &amp; #3 optional</span>
         </div>
-        <PickRow rank={1} pick={pick1} setPick={setPick1} eventClasses={eventClasses} required />
-        <PickRow rank={2} pick={pick2} setPick={setPick2} eventClasses={eventClasses} />
-        <PickRow rank={3} pick={pick3} setPick={setPick3} eventClasses={eventClasses} />
+        <EventClassPicker rank={1} pick={pick1} setPick={setPick1} eventClasses={eventClasses} required />
+        <EventClassPicker rank={2} pick={pick2} setPick={setPick2} eventClasses={eventClasses} />
+        <EventClassPicker rank={3} pick={pick3} setPick={setPick3} eventClasses={eventClasses} />
       </div>
 
       <textarea
@@ -280,86 +276,6 @@ function PromptBlock({
   );
 }
 
-// One pick slot: dropdown over (none / existing classes / propose new) plus
-// the propose-new fields when that option is chosen.
-function PickRow({
-  rank,
-  pick,
-  setPick,
-  eventClasses,
-  required = false,
-}: {
-  rank: 1 | 2 | 3;
-  pick: PickSlot;
-  setPick: (p: PickSlot) => void;
-  eventClasses: EventClass[];
-  required?: boolean;
-}) {
-  const isProposing = pick.proposed_label != null;
-  const value = isProposing
-    ? PICK_SENTINEL.PROPOSE_NEW
-    : pick.class_id != null
-    ? String(pick.class_id)
-    : PICK_SENTINEL.NONE;
-
-  const onSelectChange = (v: string) => {
-    if (v === PICK_SENTINEL.NONE) {
-      setPick({ class_id: null, proposed_label: null, proposed_description: null });
-    } else if (v === PICK_SENTINEL.PROPOSE_NEW) {
-      setPick({
-        class_id: null,
-        proposed_label: pick.proposed_label ?? "",
-        proposed_description: pick.proposed_description ?? "",
-      });
-    } else {
-      setPick({ class_id: Number(v), proposed_label: null, proposed_description: null });
-    }
-  };
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2">
-        <span className="text-muted font-mono text-sm w-8 text-right">
-          #{rank}
-          {required && <span className="text-disapprove">*</span>}
-        </span>
-        <select
-          value={value}
-          onChange={(e) => onSelectChange(e.target.value)}
-          className="flex-1 text-sm"
-        >
-          <option value={PICK_SENTINEL.NONE}>{required ? "— pick one —" : "— (skip) —"}</option>
-          <optgroup label="Existing event classes">
-            {eventClasses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.short_label}
-              </option>
-            ))}
-          </optgroup>
-          <option value={PICK_SENTINEL.PROPOSE_NEW}>+ propose a NEW event class</option>
-        </select>
-      </div>
-      {isProposing && (
-        <div className="space-y-1 bg-surface2 p-2 rounded border border-border ml-10">
-          <input
-            type="text"
-            placeholder="New class label (e.g. 'Cerco em motos')"
-            value={pick.proposed_label ?? ""}
-            onChange={(e) =>
-              setPick({ ...pick, proposed_label: e.target.value })
-            }
-            className="w-full text-sm"
-          />
-          <textarea
-            placeholder="What visual/textual pattern does this class capture?"
-            value={pick.proposed_description ?? ""}
-            onChange={(e) =>
-              setPick({ ...pick, proposed_description: e.target.value })
-            }
-            className="w-full text-sm min-h-[50px]"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
+// PickRow used to live here; consolidated into components/EventClassPicker.tsx
+// so the AnnotationForm and the random page share the same picker
+// (with optgroup-grouped class options) instead of drifting copies.

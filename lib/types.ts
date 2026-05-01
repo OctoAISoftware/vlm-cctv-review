@@ -11,6 +11,10 @@ export interface EventClass {
   short_label: string;
   content_ptbr: string | null;
   tags: string[] | null;
+  // Operator-friendly category attached server-side from
+  // lib/event_class_groups.ts. Drives the <optgroup> separators in
+  // the picker dropdowns. "(outros)" if not yet classified.
+  category?: string;
 }
 
 export interface TopMatch {

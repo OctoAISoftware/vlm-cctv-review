@@ -63,18 +63,25 @@ export interface RandomNext {
 
 /** Pick the next random cell, weighted toward under-reviewed ones.
  *  Selection space is (frame, model, prompt) triples. Within the lowest
- *  review-count bucket we pick uniformly at random. */
+ *  review-count bucket we pick uniformly at random.
+ *
+ *  ``onlyModel`` (optional): if non-empty, restrict the selection space
+ *  to triples whose model matches. Lets a reviewer focus on one model
+ *  at a time without changing the upstream weighted-coverage logic.
+ */
 export function pickRandomCell(
   rows: BenchRow[],
   counts: Map<string, number>,
   promptLabelById: Record<string, string>,
   exclude: Set<string> = new Set(),
+  onlyModel: string = "",
 ): RandomNext | null {
   // Expand each row into one entry per prompt (so the random flow can land
   // on any (frame, model, prompt) triple — not just one caption per cell).
   type Triple = { row: BenchRow; promptIdx: number };
   const triples: Triple[] = [];
   for (const r of rows) {
+    if (onlyModel && r.model !== onlyModel) continue;
     for (let i = 0; i < r.prompts.length; i++) {
       const key = `${r.frame}|${r.model}|${r.prompts[i].prompt_id}`;
       if (exclude.has(key)) continue;

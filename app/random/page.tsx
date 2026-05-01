@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { EventClass, ModelName, PickSlot, PromptId, TopMatch } from "@/lib/types";
 import { TranslateButton } from "@/components/TranslateButton";
+import { EventClassPicker } from "@/components/EventClassPicker";
+import { ModelFilter } from "@/components/ModelFilter";
 
 interface RandomCell {
   frame: string;
@@ -27,6 +30,23 @@ function emptyPick(): PickSlot {
 }
 
 export default function RandomPage() {
+  // Suspense wrapper: useSearchParams forces a CSR bailout during build.
+  return (
+    <Suspense fallback={<div className="text-muted p-4">Loading…</div>}>
+      <RandomInner />
+    </Suspense>
+  );
+}
+
+function RandomInner() {
+  const router = useRouter();
+  const sp = useSearchParams();
+  const modelFilter = sp.get("model") ?? "";
+  // Set of model names known to the system, populated from the first
+  // /api/random/next response (which includes event_classes anyway). We
+  // hold it in state so the ModelFilter pills render once we have data.
+  const [knownModels, setKnownModels] = useState<ModelName[]>([]);
+
   const [cell, setCell] = useState<RandomCell | null>(null);
   const [nextCell, setNextCell] = useState<RandomCell | null>(null);
   const [pick1, setPick1] = useState<PickSlot>(emptyPick());
@@ -57,21 +77,46 @@ export default function RandomPage() {
   };
 
   const fetchOne = useCallback(async (): Promise<RandomCell | null> => {
+    const params = new URLSearchParams();
     const exclude = Array.from(seenRef.current).join(",");
-    const r = await fetch(`/api/random/next${exclude ? `?exclude=${encodeURIComponent(exclude)}` : ""}`);
+    if (exclude) params.set("exclude", exclude);
+    if (modelFilter) params.set("model", modelFilter);
+    const url = `/api/random/next${params.toString() ? `?${params.toString()}` : ""}`;
+    const r = await fetch(url);
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
       throw new Error(d.error || `HTTP ${r.status}`);
     }
     return r.json();
+  }, [modelFilter]);
+
+  // Discover the full model list once so the ModelFilter pill row can
+  // render. /api/data is the cheapest way to learn it.
+  useEffect(() => {
+    fetch("/api/data")
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d?.models) && setKnownModels(d.models))
+      .catch(() => {});
   }, []);
+
+  const setModel = (m: string) => {
+    const params = new URLSearchParams(sp.toString());
+    if (!m) params.delete("model");
+    else params.set("model", m);
+    router.push(`/random${params.toString() ? `?${params.toString()}` : ""}`);
+    // Force a re-pick by clearing the current cell — the fetchOne dep
+    // change in useCallback will trigger via the next call.
+    setCell(null);
+    setNextCell(null);
+  };
 
   // The "seen" key is now per (frame, model, prompt) triple so the same
   // anonymous user can still land on the OTHER prompt for the same image.
   const seenKeyOf = (c: { frame: string; model: string; prompt_id: PromptId }) =>
     `${c.frame}|${c.model}|${c.prompt_id}`;
 
-  // Initial load + prefetch the next one
+  // Initial load + prefetch the next one. Re-runs when modelFilter changes
+  // (changing the URL ?model= triggers a refetch with the narrower scope).
   useEffect(() => {
     (async () => {
       try {
@@ -80,13 +125,15 @@ export default function RandomPage() {
         if (first) {
           persistSeen(seenKeyOf(first));
           fetchOne().then(setNextCell).catch(() => {});
+        } else {
+          setNextCell(null);
         }
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [modelFilter]);
 
   const resetForm = () => {
     setPick1(emptyPick());
@@ -170,8 +217,19 @@ export default function RandomPage() {
           Your picks help us decide which curated classes match real CCTV captions.
           Submitted: <strong className="text-accent">{submittedCount}</strong> ·{" "}
           {cell.cells_seen}/{cell.cells_total} cells touched globally.
+          {modelFilter && (
+            <span className="block mt-0.5 text-accent">
+              filtering to: {modelFilter}
+            </span>
+          )}
         </p>
       </div>
+
+      {knownModels.length > 0 && (
+        <div className="bg-surface border border-border rounded p-2">
+          <ModelFilter models={knownModels} active={modelFilter} onChange={setModel} />
+        </div>
+      )}
 
       <input
         type="text"
@@ -199,9 +257,9 @@ export default function RandomPage() {
         <div className="text-muted text-xs uppercase tracking-wide">
           Your top-3 (most adequate first)
         </div>
-        <PickRow rank={1} pick={pick1} setPick={setPick1} eventClasses={cell.event_classes} required />
-        <PickRow rank={2} pick={pick2} setPick={setPick2} eventClasses={cell.event_classes} />
-        <PickRow rank={3} pick={pick3} setPick={setPick3} eventClasses={cell.event_classes} />
+        <EventClassPicker rank={1} pick={pick1} setPick={setPick1} eventClasses={cell.event_classes} required size="base" />
+        <EventClassPicker rank={2} pick={pick2} setPick={setPick2} eventClasses={cell.event_classes} size="base" />
+        <EventClassPicker rank={3} pick={pick3} setPick={setPick3} eventClasses={cell.event_classes} size="base" />
       </div>
 
       <textarea
@@ -237,78 +295,6 @@ export default function RandomPage() {
   );
 }
 
-const PICK_SENTINEL = { NONE: "", PROPOSE_NEW: "__new__" } as const;
-
-function PickRow({
-  rank,
-  pick,
-  setPick,
-  eventClasses,
-  required = false,
-}: {
-  rank: 1 | 2 | 3;
-  pick: PickSlot;
-  setPick: (p: PickSlot) => void;
-  eventClasses: EventClass[];
-  required?: boolean;
-}) {
-  const isProposing = pick.proposed_label != null;
-  const value = isProposing
-    ? PICK_SENTINEL.PROPOSE_NEW
-    : pick.class_id != null
-    ? String(pick.class_id)
-    : PICK_SENTINEL.NONE;
-
-  const onSelectChange = (v: string) => {
-    if (v === PICK_SENTINEL.NONE) {
-      setPick(emptyPick());
-    } else if (v === PICK_SENTINEL.PROPOSE_NEW) {
-      setPick({ class_id: null, proposed_label: pick.proposed_label ?? "", proposed_description: pick.proposed_description ?? "" });
-    } else {
-      setPick({ class_id: Number(v), proposed_label: null, proposed_description: null });
-    }
-  };
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2">
-        <span className="text-muted font-mono text-base w-10 text-right">
-          #{rank}
-          {required && <span className="text-disapprove">*</span>}
-        </span>
-        <select
-          value={value}
-          onChange={(e) => onSelectChange(e.target.value)}
-          className="flex-1 text-base"
-        >
-          <option value={PICK_SENTINEL.NONE}>{required ? "— pick one —" : "— (skip) —"}</option>
-          <optgroup label="Existing classes">
-            {eventClasses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.short_label}
-              </option>
-            ))}
-          </optgroup>
-          <option value={PICK_SENTINEL.PROPOSE_NEW}>+ propose a NEW class</option>
-        </select>
-      </div>
-      {isProposing && (
-        <div className="space-y-1 bg-surface2 p-2 rounded border border-border ml-12">
-          <input
-            type="text"
-            placeholder="New class label"
-            value={pick.proposed_label ?? ""}
-            onChange={(e) => setPick({ ...pick, proposed_label: e.target.value })}
-            className="w-full text-base"
-          />
-          <textarea
-            placeholder="What pattern this class captures"
-            value={pick.proposed_description ?? ""}
-            onChange={(e) => setPick({ ...pick, proposed_description: e.target.value })}
-            className="w-full text-base min-h-[50px]"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
+// PickRow used to live here; consolidated into components/EventClassPicker.tsx
+// so it shares the optgroup-grouped class list with AnnotationForm instead
+// of drifting copies.

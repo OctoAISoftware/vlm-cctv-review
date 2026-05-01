@@ -17,10 +17,11 @@ export async function GET(req: NextRequest) {
         .map((s) => s.trim())
         .filter(Boolean)
     );
+    const onlyModel = url.searchParams.get("model") ?? "";
 
     const [data, counts] = await Promise.all([loadData(), loadReviewCounts()]);
     const labelById = Object.fromEntries(data.prompts.map((p) => [p.id, p.label]));
-    const cell = pickRandomCell(data.rows, counts, labelById, exclude);
+    const cell = pickRandomCell(data.rows, counts, labelById, exclude, onlyModel);
     if (!cell) {
       return NextResponse.json({ error: "no cells available" }, { status: 404 });
     }

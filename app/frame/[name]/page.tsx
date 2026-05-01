@@ -3,9 +3,10 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Annotation, AnnotationMode, ApiData } from "@/lib/types";
+import { Annotation, AnnotationMode, ApiData, ModelName } from "@/lib/types";
 import { AnnotationForm } from "@/components/AnnotationForm";
 import { ModeToggle } from "@/components/ModeToggle";
+import { ModelFilter } from "@/components/ModelFilter";
 
 const AUTHOR_LS_KEY = "qwen35-review.author";
 
@@ -24,6 +25,7 @@ function FrameDetail() {
   const sp = useSearchParams();
   const frame = decodeURIComponent(params.name);
   const mode: AnnotationMode = sp.get("mode") === "blind" ? "blind" : "image";
+  const modelFilter = sp.get("model") ?? "";
 
   const [data, setData] = useState<ApiData | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -56,8 +58,9 @@ function FrameDetail() {
     if (!data) return [];
     return data.rows
       .filter((r) => r.frame === frame)
+      .filter((r) => !modelFilter || r.model === modelFilter)
       .sort((a, b) => a.model.localeCompare(b.model));
-  }, [data, frame]);
+  }, [data, frame, modelFilter]);
 
   const allFrames = data?.frames ?? [];
   const idx = allFrames.indexOf(frame);
@@ -88,6 +91,12 @@ function FrameDetail() {
     else params.set("mode", m);
     router.push(`/frame/${encodeURIComponent(frame)}?${params.toString()}`);
   };
+  const setModel = (m: string) => {
+    const params = new URLSearchParams(sp.toString());
+    if (!m) params.delete("model");
+    else params.set("model", m);
+    router.push(`/frame/${encodeURIComponent(frame)}?${params.toString()}`);
+  };
 
   if (err) return <div className="text-disapprove">Error: {err}</div>;
   if (!data) return <div className="text-muted">Loading…</div>;
@@ -98,11 +107,15 @@ function FrameDetail() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <ModeToggle mode={mode} onChange={setMode} />
-        <span className="text-muted text-xs">
-          {blind
-            ? "BLIND: image hidden. Judge cosine matches against the captions only."
-            : "Image visible. Judge against what's actually in the image."}
-        </span>
+        <ModelFilter models={data.models} active={modelFilter} onChange={setModel} />
+      </div>
+      <div className="text-muted text-xs">
+        {blind
+          ? "BLIND: image hidden. Judge cosine matches against the captions only."
+          : "Image visible. Judge against what's actually in the image."}
+        {modelFilter && (
+          <span className="ml-2 text-accent">· filtered to {modelFilter}</span>
+        )}
       </div>
 
       <nav className="flex items-center gap-3 text-sm">

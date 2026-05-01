@@ -16,6 +16,7 @@ import {
   PromptId,
   PromptResult,
 } from "./types";
+import { categoryOf } from "./event_class_groups";
 
 function benchResultsDir(): string {
   return process.env.BENCH_RESULTS_DIR || path.resolve(process.cwd(), "..", "bench_results");
@@ -193,6 +194,9 @@ export async function loadData(): Promise<DataPayload> {
   if (!event_classes) {
     throw new Error(`no match files loaded from ${dir}`);
   }
+  // Attach the operator-friendly category to each event_class so the
+  // client can render <optgroup> separators in the dropdowns.
+  event_classes = event_classes.map((c) => ({ ...c, category: categoryOf(c.id) }));
 
   // Stable order: prompts in declaration order
   const promptOrder = Array.from(seenPrompts.keys());
