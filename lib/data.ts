@@ -104,7 +104,7 @@ const SOURCES: Array<{
     frame_prefix: "frame_",
     prompt: "frame-gun",
     prompt_label: "Frame Gun (orig)",
-    file: "cosmos-event-class-matches-frame-gun.json",
+    file: "cctv-sample-100-cosmos-event-class-matches-frame-gun.json",
   },
   {
     dataset: "cctv-sample-100",
@@ -112,7 +112,7 @@ const SOURCES: Array<{
     frame_prefix: "frame_",
     prompt: "vehicle-people",
     prompt_label: "Vehicle/People (interactions)",
-    file: "cosmos-event-class-matches-vehicle-people.json",
+    file: "cctv-sample-100-cosmos-event-class-matches-vehicle-people.json",
   },
   // Cosmos-Reason2 family — testaci
   {
