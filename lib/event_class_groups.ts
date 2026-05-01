@@ -10,7 +10,11 @@
 
 import type { EventClass } from "./types";
 
+// Operator note: "Normal" is shown FIRST so reviewers can quickly mark
+// non-events without having to scroll past 25 risk classes. The risk
+// categories follow in the order an operator would mentally triage them.
 export const CATEGORY_ORDER = [
+  "Normal",
   "Trânsito & Veículos",
   "Roubo / Furto",
   "Violência",
@@ -62,6 +66,14 @@ const ID_TO_CATEGORY: Record<number, CategoryName> = {
   64: "Patrimônio & Ambiental", // Invasão por escalada
   65: "Patrimônio & Ambiental", // Descarte/abandono suspeito
   68: "Patrimônio & Ambiental", // Incêndio ou fumaça anormal
+
+  // Normal scenarios — added 2026-04-30 so reviewers can mark non-events
+  // explicitly instead of forcing a risk class for normal scenes.
+  70: "Normal",                 // Cena vazia / sem ação aparente
+  71: "Normal",                 // Tráfego normal de veículos
+  72: "Normal",                 // Movimento normal de pedestres
+  73: "Normal",                 // Atividade comercial / serviços normais
+  74: "Normal",                 // Recreação / lazer normal
 };
 
 const FALLBACK = "(outros)" as const;
